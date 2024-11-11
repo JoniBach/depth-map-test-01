@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Depth Map Converter (Enhanced Quality)</title>
+    <!-- TensorFlow.js Core -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <!-- TensorFlow.js Converter -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <!-- TensorFlow.js Backend WebGL -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <!-- TensorFlow.js Depth Estimation Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/depth-estimation"></script>
+    <style>
+        /* Optional: Scale canvas display size for responsive design */
+        #depthMapCanvas {
+            max-width: 500px;
+            max-height: 500px;
+            width: auto;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Image to Depth Map Converter (Enhanced Quality)</h1>
+    <input type="file" id="imageUpload" accept="image/*" />
+
+    <!-- Display uploaded image -->
+    <img id="uploadedImage" alt="Uploaded image preview" />
+
+    <!-- Display depth map -->
+    <canvas id="depthMapCanvas"></canvas>
+
+    <!-- Link to JavaScript file -->
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
