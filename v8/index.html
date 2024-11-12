@@ -26,17 +26,36 @@
 <body>
   <h1>Face Mesh with TensorFlow.js and Vite</h1>
   <div class="container">
-    <img id="inputImage" src="/assets/face.jpg" crossorigin="anonymous" width="400" />
-    <div id="depthContainer">
-      <canvas id="depthCanvas" width="400" height="400"></canvas>
-    </div>
+    <img id="inputImage" src="/assets/face2.jpg" crossorigin="anonymous" width="400" />
+
+
+
     <canvas id="outputCanvas" width="400" height="400"></canvas>
     <div id="outerRingContainer">
       <canvas id="outerRingCanvas" width="400" height="400"></canvas>
     </div>
+    <div id="triangulationContainer">
+      <canvas id="triangulationCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div id="combinedOverlayContainer">
+      <canvas id="combinedOverlayCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div id="depthContainer">
+      <canvas id="depthCanvas" width="400" height="400"></canvas>
+    </div>
+    <div id="invertedDepthContainer">
+      <canvas id="invertedDepthCanvas" width="400" height="400"></canvas>
+    </div>
+
+    <div id="invertedMaskedDepthContainer">
+      <canvas id="invertedMaskedDepthCanvas" width="400" height="400"></canvas>
+    </div>
     <div id="maskedDepthContainer">
       <canvas id="maskedDepthCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="flatWireframeContainer"></div>
     <div id="wireframeContainer"></div>
     <div id="texturedContainer"></div>

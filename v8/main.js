@@ -38,6 +38,18 @@ async function main() {
     const outerRingCtx = outerRingCanvas.getContext("2d");
     const maskedDepthCanvas = document.getElementById("maskedDepthCanvas");
     const maskedDepthCtx = maskedDepthCanvas.getContext("2d");
+    const invertedDepthCanvas = document.getElementById("invertedDepthCanvas");
+    const invertedDepthCtx = invertedDepthCanvas.getContext("2d");
+    const invertedMaskedDepthCanvas = document.getElementById(
+      "invertedMaskedDepthCanvas"
+    );
+    const invertedMaskedDepthCtx = invertedMaskedDepthCanvas.getContext("2d");
+    const triangulationCanvas = document.getElementById("triangulationCanvas");
+    const triangulationCtx = triangulationCanvas.getContext("2d");
+    const combinedOverlayCanvas = document.getElementById(
+      "combinedOverlayCanvas"
+    );
+    const combinedOverlayCtx = combinedOverlayCanvas.getContext("2d");
 
     img.onload = async () => {
       const depthMap = await depthEstimator.estimateDepth(img, {
@@ -69,7 +81,7 @@ async function main() {
         outputCtx.fillStyle = "red";
         keypoints.forEach(({ x, y }) => {
           outputCtx.beginPath();
-          outputCtx.arc(x, y, 2, 0, 2 * Math.PI); // Draw a small circle at each keypoint
+          outputCtx.arc(x, y, 2, 0, 2 * Math.PI);
           outputCtx.fill();
         });
 
@@ -91,32 +103,27 @@ async function main() {
         outerRingCtx.lineWidth = 2;
         outerRingCtx.beginPath();
 
-        // Move to the first outer ring point
         const startIdx = OUTER_RING_INDICES[0];
         const startPoint = keypoints[startIdx];
         outerRingCtx.moveTo(startPoint.x, startPoint.y);
 
-        // Draw lines connecting outer ring points
         OUTER_RING_INDICES.slice(1).forEach((idx) => {
           const point = keypoints[idx];
           outerRingCtx.lineTo(point.x, point.y);
         });
-
-        // Close the loop back to the starting point
         outerRingCtx.lineTo(startPoint.x, startPoint.y);
         outerRingCtx.stroke();
 
-        // Draw masked depth map on maskedDepthCanvas using a clipping mask
+        // Draw masked depth map on maskedDepthCanvas with a clipping mask
         maskedDepthCtx.clearRect(
           0,
           0,
           maskedDepthCanvas.width,
           maskedDepthCanvas.height
         );
-        maskedDepthCtx.save(); // Save the current state before clipping
+        maskedDepthCtx.save();
         maskedDepthCtx.beginPath();
 
-        // Move to the first outer ring point for clipping
         maskedDepthCtx.moveTo(startPoint.x, startPoint.y);
         OUTER_RING_INDICES.slice(1).forEach((idx) => {
           const point = keypoints[idx];
@@ -125,7 +132,6 @@ async function main() {
         maskedDepthCtx.closePath();
         maskedDepthCtx.clip();
 
-        // Draw the depth map within the clipping path
         maskedDepthCtx.drawImage(
           depthImage,
           0,
@@ -134,8 +140,130 @@ async function main() {
           maskedDepthCanvas.height
         );
 
-        // Restore to remove clipping for future drawings
         maskedDepthCtx.restore();
+
+        // Invert the depth map on the invertedDepthCanvas
+        invertedDepthCtx.drawImage(
+          depthImage,
+          0,
+          0,
+          invertedDepthCanvas.width,
+          invertedDepthCanvas.height
+        );
+        const imageData = invertedDepthCtx.getImageData(
+          0,
+          0,
+          invertedDepthCanvas.width,
+          invertedDepthCanvas.height
+        );
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          imageData.data[i] = 255 - imageData.data[i];
+          imageData.data[i + 1] = 255 - imageData.data[i + 1];
+          imageData.data[i + 2] = 255 - imageData.data[i + 2];
+        }
+        invertedDepthCtx.putImageData(imageData, 0, 0);
+
+        // Invert the masked depth map on the invertedMaskedDepthCanvas
+        invertedMaskedDepthCtx.drawImage(
+          maskedDepthCanvas,
+          0,
+          0,
+          invertedMaskedDepthCanvas.width,
+          invertedMaskedDepthCanvas.height
+        );
+        const maskedImageData = invertedMaskedDepthCtx.getImageData(
+          0,
+          0,
+          invertedMaskedDepthCanvas.width,
+          invertedMaskedDepthCanvas.height
+        );
+        for (let i = 0; i < maskedImageData.data.length; i += 4) {
+          maskedImageData.data[i] = 255 - maskedImageData.data[i];
+          maskedImageData.data[i + 1] = 255 - maskedImageData.data[i + 1];
+          maskedImageData.data[i + 2] = 255 - maskedImageData.data[i + 2];
+        }
+        invertedMaskedDepthCtx.putImageData(maskedImageData, 0, 0);
+
+        // Draw green triangulation overlay on triangulationCanvas
+        triangulationCtx.clearRect(
+          0,
+          0,
+          triangulationCanvas.width,
+          triangulationCanvas.height
+        );
+        triangulationCtx.drawImage(
+          img,
+          0,
+          0,
+          triangulationCanvas.width,
+          triangulationCanvas.height
+        );
+        triangulationCtx.strokeStyle = "green";
+        triangulationCtx.lineWidth = 1;
+
+        for (let i = 0; i < TRIANGULATION.length; i += 3) {
+          const point1 = keypoints[TRIANGULATION[i]];
+          const point2 = keypoints[TRIANGULATION[i + 1]];
+          const point3 = keypoints[TRIANGULATION[i + 2]];
+
+          triangulationCtx.beginPath();
+          triangulationCtx.moveTo(point1.x, point1.y);
+          triangulationCtx.lineTo(point2.x, point2.y);
+          triangulationCtx.lineTo(point3.x, point3.y);
+          triangulationCtx.closePath();
+          triangulationCtx.stroke();
+        }
+
+        // Draw combined overlay on combinedOverlayCanvas
+        combinedOverlayCtx.clearRect(
+          0,
+          0,
+          combinedOverlayCanvas.width,
+          combinedOverlayCanvas.height
+        );
+        combinedOverlayCtx.drawImage(
+          img,
+          0,
+          0,
+          combinedOverlayCanvas.width,
+          combinedOverlayCanvas.height
+        );
+
+        // 1. Draw green triangulation
+        combinedOverlayCtx.strokeStyle = "green";
+        combinedOverlayCtx.lineWidth = 1;
+        for (let i = 0; i < TRIANGULATION.length; i += 3) {
+          const point1 = keypoints[TRIANGULATION[i]];
+          const point2 = keypoints[TRIANGULATION[i + 1]];
+          const point3 = keypoints[TRIANGULATION[i + 2]];
+
+          combinedOverlayCtx.beginPath();
+          combinedOverlayCtx.moveTo(point1.x, point1.y);
+          combinedOverlayCtx.lineTo(point2.x, point2.y);
+          combinedOverlayCtx.lineTo(point3.x, point3.y);
+          combinedOverlayCtx.closePath();
+          combinedOverlayCtx.stroke();
+        }
+
+        // 2. Draw blue outer ring
+        combinedOverlayCtx.strokeStyle = "blue";
+        combinedOverlayCtx.lineWidth = 2;
+        combinedOverlayCtx.beginPath();
+        combinedOverlayCtx.moveTo(startPoint.x, startPoint.y);
+        OUTER_RING_INDICES.slice(1).forEach((idx) => {
+          const point = keypoints[idx];
+          combinedOverlayCtx.lineTo(point.x, point.y);
+        });
+        combinedOverlayCtx.lineTo(startPoint.x, startPoint.y);
+        combinedOverlayCtx.stroke();
+
+        // 3. Draw red keypoints
+        combinedOverlayCtx.fillStyle = "red";
+        keypoints.forEach(({ x, y }) => {
+          combinedOverlayCtx.beginPath();
+          combinedOverlayCtx.arc(x, y, 2, 0, 2 * Math.PI);
+          combinedOverlayCtx.fill();
+        });
 
         // Setup vertices and UVs for each renderer
         const vertices = [];
