@@ -12,8 +12,10 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
+    "@tensorflow-models/depth-estimation": "^0.0.4",
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "three": "^0.170.0"
   }
 }
