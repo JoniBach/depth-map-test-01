@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>TensorFlow.js Face Mesh</title>
+    <!-- TensorFlow.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <!-- Face-Landmarks-Detection Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@latest"></script>
+</head>
+
+<body>
+    <h1>Face Mesh with TensorFlow.js</h1>
+    <img id="inputImage" src="face.jpg" width="400" />
+    <canvas id="outputCanvas" width="400" height="400"></canvas>
+
+    <script>
+        async function main() {
+            // Load the Face-Landmarks-Detection model.
+            const model = await faceLandmarksDetection.load(
+                faceLandmarksDetection.SupportedPackages.mediapipeFacemesh
+            );
+
+            // Get the image element.
+            const img = document.getElementById('inputImage');
+
+            // Ensure the image is fully loaded.
+            img.onload = async () => {
+                // Run the model on the image.
+                const predictions = await model.estimateFaces({
+                    input: img,
+                    returnTensors: false,
+                    flipHorizontal: false,
+                    predictIrises: false,
+                });
+
+                // Check if any faces are detected.
+                if (predictions.length > 0) {
+                    // Get the canvas context.
+                    const canvas = document.getElementById('outputCanvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // Draw the image onto the canvas.
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    // Loop through each face detected.
+                    predictions.forEach((prediction) => {
+                        const keypoints = prediction.scaledMesh;
+
+                        // Draw each keypoint.
+                        ctx.fillStyle = 'red';
+                        keypoints.forEach(([x, y]) => {
+                            ctx.beginPath();
+                            ctx.arc(x, y, 1, 0, 2 * Math.PI);
+                            ctx.fill();
+                        });
+                    });
+                } else {
+                    console.log('No faces detected.');
+                }
+            };
+
+            // Trigger the onload event if the image is cached.
+            if (img.complete && img.naturalHeight !== 0) {
+                img.onload();
+            }
+        }
+
+        main();
+    </script>
+</body>
+
+</html>

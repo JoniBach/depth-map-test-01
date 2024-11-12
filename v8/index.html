@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Face Mesh with TensorFlow.js and Vite</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+
+    }
+
+    canvas {
+      border: 1px solid #ccc;
+    }
+
+    .container {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      display: flex;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Face Mesh with TensorFlow.js and Vite</h1>
+  <div class="container">
+    <img id="inputImage" src="/assets/face.jpg" crossorigin="anonymous" width="400" />
+    <canvas id="outputCanvas" width="400" height="400"></canvas>
+    <div id="wireframeContainer"></div>
+    <div id="texturedContainer"></div>
+  </div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>
