@@ -8,24 +8,30 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import TRIANGULATION from "./TRIANGULATION.json";
 
-// Define outer ring landmark indices
+/**
+ * Outer ring landmark indices for facial landmarks.
+ * @constant {number[]}
+ */
 const OUTER_RING_INDICES = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
   400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
   54, 103, 67, 109,
 ];
 
+/**
+ * Initializes the application.
+ */
 async function init() {
   try {
     // Load models
     const [detector, depthEstimator] = await loadModels();
 
     // Load image
-    const img = await loadImage("inputImage");
+    const image = await loadImage("inputImage");
 
     // Process image
     const { depthImage, predictions } = await processImage(
-      img,
+      image,
       detector,
       depthEstimator
     );
@@ -38,15 +44,19 @@ async function init() {
     const keypoints = predictions[0].keypoints;
 
     // Draw overlays
-    drawOverlays(img, keypoints, depthImage);
+    drawOverlays(image, keypoints, depthImage);
 
     // Set up Three.js scenes
-    setupThreeJSScenes(img, keypoints);
+    setupThreeJSScenes(image, keypoints);
   } catch (error) {
     console.error("An error occurred:", error);
   }
 }
 
+/**
+ * Loads the face detection and depth estimation models.
+ * @returns {Promise<[faceLandmarksDetection.FaceLandmarksDetector, depthEstimation.DepthEstimator]>}
+ */
 async function loadModels() {
   const detector = await faceLandmarksDetection.createDetector(
     faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
@@ -67,10 +77,17 @@ async function loadModels() {
   return [detector, depthEstimator];
 }
 
+/**
+ * Loads an image element by its ID.
+ * @param {string} imageId - The ID of the image element.
+ * @returns {Promise<HTMLImageElement>}
+ */
 function loadImage(imageId) {
   return new Promise((resolve, reject) => {
     const img = document.getElementById(imageId);
-    if (img.complete && img.naturalHeight !== 0) {
+    if (!img) {
+      reject(new Error(`Image element with ID "${imageId}" not found.`));
+    } else if (img.complete && img.naturalHeight !== 0) {
       resolve(img);
     } else {
       img.onload = () => resolve(img);
@@ -79,7 +96,18 @@ function loadImage(imageId) {
   });
 }
 
+/**
+ * Processes the image to obtain depth information and facial landmarks.
+ * @param {HTMLImageElement} img - The image to process.
+ * @param {faceLandmarksDetection.FaceLandmarksDetector} detector - The face landmarks detector.
+ * @param {depthEstimation.DepthEstimator} depthEstimator - The depth estimator.
+ * @returns {Promise<{ depthImage: CanvasImageSource, predictions: Array }>}
+ */
 async function processImage(img, detector, depthEstimator) {
+  if (!img || !detector || !depthEstimator) {
+    throw new Error("Invalid arguments passed to processImage.");
+  }
+
   const depthMap = await depthEstimator.estimateDepth(img, {
     minDepth: 0,
     maxDepth: 1,
@@ -94,75 +122,106 @@ async function processImage(img, detector, depthEstimator) {
   return { depthImage, predictions };
 }
 
-function drawOverlays(img, keypoints, depthImage) {
-  // Get canvas contexts
-  const outputCanvas = document.getElementById("outputCanvas");
-  const outputCtx = outputCanvas.getContext("2d");
-  const outerRingCanvas = document.getElementById("outerRingCanvas");
-  const outerRingCtx = outerRingCanvas.getContext("2d");
-  const maskedDepthCanvas = document.getElementById("maskedDepthCanvas");
-  const maskedDepthCtx = maskedDepthCanvas.getContext("2d");
-  const invertedDepthCanvas = document.getElementById("invertedDepthCanvas");
-  const invertedDepthCtx = invertedDepthCanvas.getContext("2d");
-  const invertedMaskedDepthCanvas = document.getElementById(
-    "invertedMaskedDepthCanvas"
-  );
-  const invertedMaskedDepthCtx = invertedMaskedDepthCanvas.getContext("2d");
-  const triangulationCanvas = document.getElementById("triangulationCanvas");
-  const triangulationCtx = triangulationCanvas.getContext("2d");
-  const combinedOverlayCanvas = document.getElementById(
-    "combinedOverlayCanvas"
-  );
-  const combinedOverlayCtx = combinedOverlayCanvas.getContext("2d");
-  const depthCanvas = document.getElementById("depthCanvas");
-  const depthCtx = depthCanvas.getContext("2d");
-
-  // Draw the original image on the output canvas
-  outputCtx.drawImage(img, 0, 0, outputCanvas.width, outputCanvas.height);
-
-  // Draw keypoints
-  drawKeypoints(outputCtx, keypoints);
-
-  // Draw outer ring
-  drawOuterRing(outerRingCtx, img, keypoints);
-
-  // Draw depth map
-  drawDepthMap(depthCtx, depthImage);
-
-  // Draw masked depth map
-  drawMaskedDepthMap(maskedDepthCtx, depthImage, keypoints);
-
-  // Invert depth map
-  invertCanvasImage(invertedDepthCtx, depthImage);
-
-  // Invert masked depth map
-  invertCanvasImage(invertedMaskedDepthCtx, maskedDepthCanvas);
-
-  // Draw triangulation overlay
-  drawTriangulation(triangulationCtx, img, keypoints);
-
-  // Draw combined overlay
-  drawCombinedOverlay(combinedOverlayCtx, img, keypoints);
+/**
+ * Retrieves canvas contexts for the specified canvas element IDs.
+ * @param {string[]} canvasIds - Array of canvas element IDs.
+ * @returns {Object} - An object mapping canvas IDs to their 2D contexts.
+ */
+function getCanvasContexts(canvasIds) {
+  const contexts = {};
+  canvasIds.forEach((id) => {
+    const canvas = document.getElementById(id);
+    if (canvas) {
+      contexts[id] = canvas.getContext("2d");
+    } else {
+      console.warn(`Canvas element with ID "${id}" not found.`);
+    }
+  });
+  return contexts;
 }
 
-function drawKeypoints(ctx, keypoints) {
-  ctx.fillStyle = "red";
+/**
+ * Draws various overlays on the image using the provided keypoints and depth image.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ * @param {CanvasImageSource} depthImage - The depth image.
+ */
+function drawOverlays(image, keypoints, depthImage) {
+  const canvasIds = [
+    "outputCanvas",
+    "outerRingCanvas",
+    "maskedDepthCanvas",
+    "invertedDepthCanvas",
+    "invertedMaskedDepthCanvas",
+    "triangulationCanvas",
+    "combinedOverlayCanvas",
+    "depthCanvas",
+  ];
+
+  const contexts = getCanvasContexts(canvasIds);
+
+  // Draw the original image on the output canvas
+  contexts.outputCanvas.drawImage(
+    image,
+    0,
+    0,
+    contexts.outputCanvas.canvas.width,
+    contexts.outputCanvas.canvas.height
+  );
+
+  // Draw keypoints
+  drawKeypoints(contexts.outputCanvas, keypoints);
+
+  // Draw outer ring
+  drawOuterRing(contexts.outerRingCanvas, image, keypoints);
+
+  // Draw depth map
+  drawDepthMap(contexts.depthCanvas, depthImage);
+
+  // Draw masked depth map
+  drawMaskedDepthMap(contexts.maskedDepthCanvas, depthImage, keypoints);
+
+  // Invert depth map
+  invertCanvasImage(contexts.invertedDepthCanvas, depthImage);
+
+  // Invert masked depth map
+  invertCanvasImage(
+    contexts.invertedMaskedDepthCanvas,
+    contexts.maskedDepthCanvas.canvas
+  );
+
+  // Draw triangulation overlay
+  drawTriangulation(contexts.triangulationCanvas, image, keypoints);
+
+  // Draw combined overlay
+  drawCombinedOverlay(contexts.combinedOverlayCanvas, image, keypoints);
+}
+
+/**
+ * Draws facial keypoints on a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {Array} keypoints - Array of keypoint objects with x and y properties.
+ * @param {string} [color='red'] - The color of the keypoints.
+ * @param {number} [radius=2] - The radius of each keypoint.
+ */
+function drawKeypoints(ctx, keypoints, color = "red", radius = 2) {
+  ctx.fillStyle = color;
   keypoints.forEach(({ x, y }) => {
     ctx.beginPath();
-    ctx.arc(x, y, 2, 0, 2 * Math.PI);
+    ctx.arc(x, y, radius, 0, 2 * Math.PI);
     ctx.fill();
   });
 }
 
-function drawOuterRing(ctx, img, keypoints) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.strokeStyle = "blue";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-
+/**
+ * Creates the outer ring path on a canvas context based on keypoints.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ */
+function createOuterRingPath(ctx, keypoints) {
   const startIdx = OUTER_RING_INDICES[0];
   const startPoint = keypoints[startIdx];
+  ctx.beginPath();
   ctx.moveTo(startPoint.x, startPoint.y);
 
   OUTER_RING_INDICES.slice(1).forEach((idx) => {
@@ -170,51 +229,92 @@ function drawOuterRing(ctx, img, keypoints) {
     ctx.lineTo(point.x, point.y);
   });
   ctx.closePath();
+}
+
+/**
+ * Draws the outer ring of facial landmarks on a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ * @param {string} [strokeStyle='blue'] - The stroke color.
+ * @param {number} [lineWidth=2] - The line width.
+ */
+function drawOuterRing(
+  ctx,
+  image,
+  keypoints,
+  strokeStyle = "blue",
+  lineWidth = 2
+) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
+
+  createOuterRingPath(ctx, keypoints);
   ctx.stroke();
 }
 
+/**
+ * Draws the depth map onto a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {CanvasImageSource} depthImage - The depth image.
+ */
 function drawDepthMap(ctx, depthImage) {
   ctx.drawImage(depthImage, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
+/**
+ * Draws the masked depth map using the outer ring path as a clipping mask.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {CanvasImageSource} depthImage - The depth image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ */
 function drawMaskedDepthMap(ctx, depthImage, keypoints) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.save();
-  ctx.beginPath();
 
-  const startIdx = OUTER_RING_INDICES[0];
-  const startPoint = keypoints[startIdx];
-  ctx.moveTo(startPoint.x, startPoint.y);
-
-  OUTER_RING_INDICES.slice(1).forEach((idx) => {
-    const point = keypoints[idx];
-    ctx.lineTo(point.x, point.y);
-  });
-  ctx.closePath();
+  createOuterRingPath(ctx, keypoints);
   ctx.clip();
 
   ctx.drawImage(depthImage, 0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.restore();
 }
 
+/**
+ * Inverts the colors of an image or canvas source and draws it onto a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {CanvasImageSource} source - The source image or canvas.
+ */
 function invertCanvasImage(ctx, source) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.drawImage(source, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = 255 - data[i]; // Red
-    data[i + 1] = 255 - data[i + 1]; // Green
-    data[i + 2] = 255 - data[i + 2]; // Blue
-  }
-  ctx.putImageData(imageData, 0, 0);
+
+  ctx.globalCompositeOperation = "difference";
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.globalCompositeOperation = "source-over";
 }
 
-function drawTriangulation(ctx, img, keypoints) {
+/**
+ * Draws the facial triangulation overlay on a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ * @param {string} [strokeStyle='green'] - The stroke color.
+ * @param {number} [lineWidth=1] - The line width.
+ */
+function drawTriangulation(
+  ctx,
+  image,
+  keypoints,
+  strokeStyle = "green",
+  lineWidth = 1
+) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.strokeStyle = "green";
-  ctx.lineWidth = 1;
+  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.strokeStyle = strokeStyle;
+  ctx.lineWidth = lineWidth;
 
   for (let i = 0; i < TRIANGULATION.length; i += 3) {
     const point1 = keypoints[TRIANGULATION[i]];
@@ -230,47 +330,33 @@ function drawTriangulation(ctx, img, keypoints) {
   }
 }
 
-function drawCombinedOverlay(ctx, img, keypoints) {
+/**
+ * Draws a combined overlay of the triangulation, outer ring, and keypoints on a canvas context.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ */
+function drawCombinedOverlay(ctx, image, keypoints) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
   // Draw triangulation
-  ctx.strokeStyle = "green";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < TRIANGULATION.length; i += 3) {
-    const point1 = keypoints[TRIANGULATION[i]];
-    const point2 = keypoints[TRIANGULATION[i + 1]];
-    const point3 = keypoints[TRIANGULATION[i + 2]];
-
-    ctx.beginPath();
-    ctx.moveTo(point1.x, point1.y);
-    ctx.lineTo(point2.x, point2.y);
-    ctx.lineTo(point3.x, point3.y);
-    ctx.closePath();
-    ctx.stroke();
-  }
+  drawTriangulation(ctx, image, keypoints);
 
   // Draw outer ring
-  ctx.strokeStyle = "blue";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  const startIdx = OUTER_RING_INDICES[0];
-  const startPoint = keypoints[startIdx];
-  ctx.moveTo(startPoint.x, startPoint.y);
-
-  OUTER_RING_INDICES.slice(1).forEach((idx) => {
-    const point = keypoints[idx];
-    ctx.lineTo(point.x, point.y);
-  });
-  ctx.closePath();
-  ctx.stroke();
+  drawOuterRing(ctx, image, keypoints);
 
   // Draw keypoints
   drawKeypoints(ctx, keypoints);
 }
 
-function setupThreeJSScenes(img, keypoints) {
-  const verticesData = getVerticesData(img, keypoints);
+/**
+ * Sets up the Three.js scenes for rendering 3D models.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ */
+function setupThreeJSScenes(image, keypoints) {
+  const verticesData = getVerticesData(image, keypoints);
 
   // Flat wireframe scene
   const flatWireframeScene = createThreeJSScene(
@@ -278,8 +364,7 @@ function setupThreeJSScenes(img, keypoints) {
     verticesData.flatVertices,
     verticesData.uvCoordinates,
     verticesData.indices,
-    { color: 0xff0000, wireframe: true },
-    true
+    { color: 0xff0000, wireframe: true }
   );
 
   // 3D wireframe scene
@@ -288,12 +373,11 @@ function setupThreeJSScenes(img, keypoints) {
     verticesData.vertices,
     verticesData.uvCoordinates,
     verticesData.indices,
-    { color: 0x00ff00, wireframe: true },
-    true
+    { color: 0x00ff00, wireframe: true }
   );
 
   // Textured 3D scene
-  const texture = new THREE.Texture(img);
+  const texture = new THREE.Texture(image);
   texture.needsUpdate = true;
 
   const texturedScene = createThreeJSScene(
@@ -301,24 +385,29 @@ function setupThreeJSScenes(img, keypoints) {
     verticesData.vertices,
     verticesData.uvCoordinates,
     verticesData.indices,
-    { map: texture, side: THREE.DoubleSide },
-    false
+    { map: texture, side: THREE.DoubleSide }
   );
 
   // Animate scenes
   animateScenes([flatWireframeScene, wireframeScene, texturedScene]);
 }
 
-function getVerticesData(img, keypoints) {
+/**
+ * Generates vertex data for 3D rendering based on keypoints.
+ * @param {HTMLImageElement} image - The original image.
+ * @param {Array} keypoints - Array of facial landmark keypoints.
+ * @param {number} [depthScale=1] - Scale factor for the depth (z-axis).
+ * @returns {Object} - An object containing vertices, flatVertices, uvCoordinates, and indices.
+ */
+function getVerticesData(image, keypoints, depthScale = 1) {
   const vertices = [];
   const flatVertices = [];
   const uvCoordinates = [];
-  const depthScale = 1;
 
   keypoints.forEach(({ x, y, z }) => {
-    vertices.push(x - img.width / 2, -y + img.height / 2, z * depthScale);
-    flatVertices.push(x - img.width / 2, -y + img.height / 2, 0);
-    uvCoordinates.push(x / img.width, 1 - y / img.height);
+    vertices.push(x - image.width / 2, -y + image.height / 2, z * depthScale);
+    flatVertices.push(x - image.width / 2, -y + image.height / 2, 0);
+    uvCoordinates.push(x / image.width, 1 - y / image.height);
   });
 
   const indices = [];
@@ -329,15 +418,28 @@ function getVerticesData(img, keypoints) {
   return { vertices, flatVertices, uvCoordinates, indices };
 }
 
+/**
+ * Creates a Three.js scene with a mesh constructed from provided geometry and material options.
+ * @param {string} containerId - The ID of the container element.
+ * @param {number[]} positions - Vertex positions.
+ * @param {number[]} uvs - UV texture coordinates.
+ * @param {number[]} indices - Indices for the mesh.
+ * @param {Object} materialOptions - Options for the material.
+ * @returns {Object} - An object containing the scene, camera, renderer, and controls.
+ */
 function createThreeJSScene(
   containerId,
   positions,
   uvs,
   indices,
-  materialOptions,
-  isWireframe
+  materialOptions
 ) {
   const container = document.getElementById(containerId);
+  if (!container) {
+    console.warn(`Container element with ID "${containerId}" not found.`);
+    return null;
+  }
+
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
   camera.position.z = 500;
@@ -358,12 +460,7 @@ function createThreeJSScene(
   geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
 
-  let material;
-  if (materialOptions.map) {
-    material = new THREE.MeshBasicMaterial(materialOptions);
-  } else {
-    material = new THREE.MeshBasicMaterial(materialOptions);
-  }
+  const material = new THREE.MeshBasicMaterial(materialOptions);
 
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
@@ -371,12 +468,19 @@ function createThreeJSScene(
   return { scene, camera, renderer, controls };
 }
 
+/**
+ * Animates multiple Three.js scenes.
+ * @param {Array} scenes - Array of scene objects containing renderer, scene, camera, and controls.
+ */
 function animateScenes(scenes) {
   function animate() {
     requestAnimationFrame(animate);
-    scenes.forEach(({ renderer, scene, camera, controls }) => {
-      controls.update();
-      renderer.render(scene, camera);
+    scenes.forEach((sceneObj) => {
+      if (sceneObj) {
+        const { renderer, scene, camera, controls } = sceneObj;
+        controls.update();
+        renderer.render(scene, camera);
+      }
     });
   }
   animate();
