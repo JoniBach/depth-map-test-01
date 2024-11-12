@@ -241,7 +241,7 @@ async function initThreeJsScene(depthTexture, imgWidth, imgHeight, img) {
         map: texture,
         displacementMap: depthTexture,
         displacementScale: -0.3, // Lower displacement scale to reduce edge artifacts
-        transparent: true, // Enable transparency for masking
+        transparent: false, // Enable transparency for masking
         alphaMap: depthTexture, // Use depth texture as alpha map
         alphaTest: 0.3, // Set threshold to ignore fully transparent areas
         depthWrite: false, // Avoid depth conflicts with background
