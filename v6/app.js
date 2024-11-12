@@ -230,8 +230,8 @@ function initializePaintingTools() {
   depthMapCanvas.addEventListener("mousemove", (e) => {
     cursorRing.style.display = "block"; // Show the ring
     const rect = depthMapCanvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX + window.scrollX - rect.left;
+    const y = e.clientY + window.scrollY - rect.top;
 
     cursorRing.style.left = `${x + rect.left}px`;
     cursorRing.style.top = `${y + rect.top}px`;

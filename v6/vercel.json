@@ -1,0 +1,7 @@
+{
+    "build": {
+        "command": "vite build",
+        "outputDirectory": "dist",
+        "public": "public"
+    }
+}

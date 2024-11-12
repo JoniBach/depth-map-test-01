@@ -44,7 +44,14 @@
             border-right: 1px solid #ddd;
             box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.1);
             flex-shrink: 0;
+            height: 100vh;
+            /* Full viewport height */
+            max-height: 100vh;
+            /* Maximum height set to viewport height */
+            overflow-y: auto;
+            /* Enable vertical scrolling */
         }
+
 
         #sidebar h1,
         #sidebar h2 {
@@ -265,16 +272,25 @@
                     effect. This AI-powered depth estimation allows for more dynamic and accurate 3D reconstructions,
                     giving a new perspective to flat images.
                 </p>
-
+                <p>
+                    <a href="https://github.com/JoniBach/depth-map-test-01/tree/main/v6" target="_blank"
+                        style="color: #1a73e8; text-decoration: none;">
+                        View the Project on GitHub
+                    </a>
+                </p>
             </div>
         </div>
+
+        <!-- Move mainContent outside the sidebar div -->
         <div id="mainContent">
             <div id="threeContainer"></div>
         </div>
     </div>
+
     <div id="cursorRing"></div>
 
     <script type="module" src="app.js"></script>
 </body>
+
 
 </html>
