@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Image from Depth Map</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/depth-estimation"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        #container {
+            max-width: 100%;
+        }
+
+        #depthMapCanvas,
+        #imagePreview,
+        #threeContainer {
+            max-width: 500px;
+            max-height: 500px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>3D Image from Depth Map</h1>
+    <input type="file" id="imageUpload" accept="image/*" />
+    <div>
+        <label for="depthSlider">Adjust Depth:</label>
+        <input type="range" id="depthSlider" min="0" max="5" step="0.1" value="1" />
+    </div>
+    <div>
+        <label for="toneRangeSlider">Adjust Tone Range:</label>
+        <input type="range" id="toneRangeSlider" min="0" max="255" step="1" value="10" />
+    </div>
+    <div id="container">
+        <img id="imagePreview" alt="Original Image Preview" />
+        <canvas id="depthMapCanvas"></canvas>
+        <div id="threeContainer"></div>
+    </div>
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
