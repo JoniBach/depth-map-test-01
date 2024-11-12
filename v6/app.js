@@ -205,8 +205,9 @@ function initializePaintingTools() {
     cursorRing.style.height = `${brushSize}px`;
     cursorRing.style.borderColor =
       tool === "eraser" ? "red" : "rgba(255, 255, 255, 0.8)";
-    cursorRing.style.opacity = opacity;
-    cursorRing.style.boxShadow = `0 0 ${feather}px rgba(255, 255, 255, 0.5)`;
+    cursorRing.style.boxShadow = `0 0 ${feather * 2}px rgba(255, 255, 255, ${
+      opacity * 0.5
+    })`;
   }
 
   // Call updateCursorRing whenever brush settings change
