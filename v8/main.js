@@ -238,16 +238,21 @@ function createOuterRingPath(ctx, keypoints) {
  * @param {Array} keypoints - Array of facial landmark keypoints.
  * @param {string} [strokeStyle='blue'] - The stroke color.
  * @param {number} [lineWidth=2] - The line width.
+ * @param {boolean} [drawImageFirst=true] - Whether to draw the image before drawing the outer ring.
  */
 function drawOuterRing(
   ctx,
   image,
   keypoints,
   strokeStyle = "blue",
-  lineWidth = 2
+  lineWidth = 2,
+  drawImageFirst = true
 ) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (drawImageFirst) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+
   ctx.strokeStyle = strokeStyle;
   ctx.lineWidth = lineWidth;
 
@@ -303,16 +308,21 @@ function invertCanvasImage(ctx, source) {
  * @param {Array} keypoints - Array of facial landmark keypoints.
  * @param {string} [strokeStyle='green'] - The stroke color.
  * @param {number} [lineWidth=1] - The line width.
+ * @param {boolean} [drawImageFirst=true] - Whether to draw the image before drawing the triangulation.
  */
 function drawTriangulation(
   ctx,
   image,
   keypoints,
   strokeStyle = "green",
-  lineWidth = 1
+  lineWidth = 1,
+  drawImageFirst = true
 ) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (drawImageFirst) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+  }
+
   ctx.strokeStyle = strokeStyle;
   ctx.lineWidth = lineWidth;
 
@@ -340,14 +350,14 @@ function drawCombinedOverlay(ctx, image, keypoints) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  // Draw triangulation
-  drawTriangulation(ctx, image, keypoints);
+  // Draw triangulation without redrawing the image
+  drawTriangulation(ctx, image, keypoints, "green", 1, false);
 
-  // Draw outer ring
-  drawOuterRing(ctx, image, keypoints);
+  // Draw outer ring without redrawing the image
+  drawOuterRing(ctx, image, keypoints, "blue", 2, false);
 
   // Draw keypoints
-  drawKeypoints(ctx, keypoints);
+  drawKeypoints(ctx, keypoints, "red", 2);
 }
 
 /**
@@ -357,15 +367,6 @@ function drawCombinedOverlay(ctx, image, keypoints) {
  */
 function setupThreeJSScenes(image, keypoints) {
   const verticesData = getVerticesData(image, keypoints);
-
-  // Flat wireframe scene
-  const flatWireframeScene = createThreeJSScene(
-    "flatWireframeContainer",
-    verticesData.flatVertices,
-    verticesData.uvCoordinates,
-    verticesData.indices,
-    { color: 0xff0000, wireframe: true }
-  );
 
   // 3D wireframe scene
   const wireframeScene = createThreeJSScene(
@@ -388,8 +389,26 @@ function setupThreeJSScenes(image, keypoints) {
     { map: texture, side: THREE.DoubleSide }
   );
 
+  // Point Cloud Scene
+  const pointCloudScene = createPointCloudScene(
+    "pointCloudContainer",
+    verticesData.vertices
+  );
+
+  // Frame Rim Scene
+  const frameRimScene = createFrameRimScene(
+    "frameRimContainer",
+    verticesData.vertices,
+    OUTER_RING_INDICES
+  );
+
   // Animate scenes
-  animateScenes([flatWireframeScene, wireframeScene, texturedScene]);
+  animateScenes([
+    wireframeScene,
+    texturedScene,
+    pointCloudScene,
+    frameRimScene,
+  ]);
 }
 
 /**
@@ -464,6 +483,96 @@ function createThreeJSScene(
 
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
+
+  return { scene, camera, renderer, controls };
+}
+
+/**
+ * Creates a Three.js scene displaying a 3D point cloud.
+ * @param {string} containerId - The ID of the container element.
+ * @param {number[]} positions - Vertex positions.
+ * @returns {Object} - An object containing the scene, camera, renderer, and controls.
+ */
+function createPointCloudScene(containerId, positions) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.warn(`Container element with ID "${containerId}" not found.`);
+    return null;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+  camera.position.z = 500;
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(400, 400);
+  container.appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.25;
+  controls.enableZoom = true;
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3)
+  );
+
+  const material = new THREE.PointsMaterial({ color: 0xff0000, size: 2 });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+
+  return { scene, camera, renderer, controls };
+}
+
+/**
+ * Creates a Three.js scene displaying the outer frame rim of the face.
+ * @param {string} containerId - The ID of the container element.
+ * @param {number[]} positions - Vertex positions.
+ * @param {number[]} ringIndices - Indices of the outer ring landmarks.
+ * @returns {Object} - An object containing the scene, camera, renderer, and controls.
+ */
+function createFrameRimScene(containerId, positions, ringIndices) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    console.warn(`Container element with ID "${containerId}" not found.`);
+    return null;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+  camera.position.z = 500;
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(400, 400);
+  container.appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.25;
+  controls.enableZoom = true;
+
+  // Extract the positions for the outer ring
+  const ringPositions = [];
+  ringIndices.forEach((idx) => {
+    ringPositions.push(
+      positions[idx * 3],
+      positions[idx * 3 + 1],
+      positions[idx * 3 + 2]
+    );
+  });
+
+  // Create a closed loop by adding the first point at the end
+  ringPositions.push(ringPositions[0], ringPositions[1], ringPositions[2]);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(ringPositions, 3)
+  );
+
+  const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+  const line = new THREE.LineLoop(geometry, material);
+  scene.add(line);
 
   return { scene, camera, renderer, controls };
 }
