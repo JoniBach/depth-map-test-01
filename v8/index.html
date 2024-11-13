@@ -19,47 +19,133 @@
       align-items: center;
       gap: 20px;
       flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Style for image and input boxes */
+    .box {
+      border: 1px solid #ccc;
+      width: 400px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .box img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    /* Optional: Style the file input */
+    #fileInput {
+      font-size: 16px;
     }
   </style>
 </head>
 
 <body>
   <h1>Face Mesh with TensorFlow.js, Three.js and Vite</h1>
+
   <div class="container">
-    <img id="inputImage" src="/assets/face4.jpg" crossorigin="anonymous" width="400" />
+    <!-- Input Box -->
+    <div class="box">
+      <input type="file" id="fileInput" accept="image/*" />
+    </div>
 
     <!-- Existing elements -->
+    <div class="box">
+      <img id="inputImage" src="/assets/face4.jpg" crossorigin="anonymous" />
+    </div>
+
+    <div class="box">
+      <p>2D Mesh Projection: Utilizes TensorFlow.js to detect facial landmarks from the input image and constructs a 2D
+        mesh by connecting these keypoints, providing a detailed visual representation of the facial structure.</p>
+    </div>
+
+    <!-- Keep the rest of your content unchanged -->
     <canvas id="outputCanvas" width="400" height="400"></canvas>
+
     <div id="outerRingContainer">
       <canvas id="outerRingCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="triangulationContainer">
       <canvas id="triangulationCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="combinedOverlayContainer">
       <canvas id="combinedOverlayCanvas" width="400" height="400"></canvas>
     </div>
+
+    <div class="box">
+      <p>Depth Map Generation: Employs TensorFlow.js's depth estimation model to create a depth map from the input
+        image, predicting the elevation of each facial feature to facilitate a pseudo-3D representation of the face.</p>
+    </div>
+
     <div id="depthContainer">
       <canvas id="depthCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="invertedDepthContainer">
       <canvas id="invertedDepthCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="invertedMaskedDepthContainer">
       <canvas id="invertedMaskedDepthCanvas" width="400" height="400"></canvas>
     </div>
+
     <div id="maskedDepthContainer">
       <canvas id="maskedDepthCanvas" width="400" height="400"></canvas>
     </div>
 
+    <div class="box">
+      <p>3D Spatial Plotting: Transforms the 2D facial landmarks and depth data into three-dimensional coordinates,
+        enabling the plotting of points in 3D space for comprehensive spatial visualization and analysis.</p>
+    </div>
     <!-- New containers for the point cloud and frame rim -->
     <div id="pointCloudContainer"></div>
     <div id="frameRimContainer"></div>
     <div id="wireframeContainer"></div>
+
+    <div class="box">
+      <p>Texturing the 3D Mesh: Applies the original input image as a texture onto the generated 3D mesh, enhancing the
+        visual realism by mapping 2D image data onto the 3D structure.</p>
+    </div>
     <div id="texturedContainer"></div>
   </div>
 
   <script type="module" src="/main.js"></script>
+
+  <!-- Script to handle file upload and refresh the page -->
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const inputImage = document.getElementById('inputImage');
+
+    // Check if there's image data in localStorage
+    if (localStorage.getItem('uploadedImage')) {
+      inputImage.src = localStorage.getItem('uploadedImage');
+      // Remove the image data from localStorage after setting it
+      localStorage.removeItem('uploadedImage');
+    }
+
+    fileInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+
+      if (file) {
+        const reader = new FileReader();
+
+        reader.onload = function (e) {
+          // Store the image data in localStorage
+          localStorage.setItem('uploadedImage', e.target.result);
+          // Refresh the page
+          location.reload();
+        };
+
+        reader.readAsDataURL(file);
+      }
+    });
+  </script>
 </body>
 
 </html>

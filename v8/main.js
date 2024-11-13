@@ -465,7 +465,7 @@ function createThreeJSScene(
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(400, 400);
   container.appendChild(renderer.domElement);
-
+  renderer.setClearColor(0xffffff, 0);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.25;
@@ -505,6 +505,7 @@ function createPointCloudScene(containerId, positions) {
   camera.position.z = 500;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(400, 400);
+  renderer.setClearColor(0xffffff, 0);
   container.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -518,20 +519,18 @@ function createPointCloudScene(containerId, positions) {
     new THREE.Float32BufferAttribute(positions, 3)
   );
 
-  const material = new THREE.PointsMaterial({ color: 0xff0000, size: 2 });
+  // Increased point size from 2 to 5
+  const material = new THREE.PointsMaterial({ color: 0xff0000, size: 5 });
+
+  // Optional: Disable size attenuation if you want consistent point sizes
+  // const material = new THREE.PointsMaterial({ color: 0xff0000, size: 5, sizeAttenuation: false });
+
   const points = new THREE.Points(geometry, material);
   scene.add(points);
 
   return { scene, camera, renderer, controls };
 }
 
-/**
- * Creates a Three.js scene displaying the outer frame rim of the face.
- * @param {string} containerId - The ID of the container element.
- * @param {number[]} positions - Vertex positions.
- * @param {number[]} ringIndices - Indices of the outer ring landmarks.
- * @returns {Object} - An object containing the scene, camera, renderer, and controls.
- */
 function createFrameRimScene(containerId, positions, ringIndices) {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -545,6 +544,7 @@ function createFrameRimScene(containerId, positions, ringIndices) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(400, 400);
   container.appendChild(renderer.domElement);
+  renderer.setClearColor(0xffffff, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -570,7 +570,8 @@ function createFrameRimScene(containerId, positions, ringIndices) {
     new THREE.Float32BufferAttribute(ringPositions, 3)
   );
 
-  const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+  // Change the color from yellow (0xffff00) to blue (0x0000ff)
+  const material = new THREE.LineBasicMaterial({ color: 0x0000ff });
   const line = new THREE.LineLoop(geometry, material);
   scene.add(line);
 
