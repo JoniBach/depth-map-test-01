@@ -9,31 +9,115 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import TRIANGULATION from "./TRIANGULATION.json";
 
 /**
- * Outer ring landmark indices for facial landmarks.
- * @constant {number[]}
+ * Generates the configuration for application models, scenes, and overlays based on image dimensions.
+ * @param {Object} imageInputDimensions - The dimensions of the input image.
+ * @param {number} imageInputDimensions.width - The width of the input image.
+ * @param {number} imageInputDimensions.height - The height of the input image.
+ * @returns {Object} The complete configuration object.
  */
-const OUTER_RING_INDICES = [
-  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
-  400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
-  54, 103, 67, 109,
-];
+const chartConfiguration = (imageInputDimensions) => ({
+  modelConfig: {
+    detector: {
+      modelType: faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+      runtime: "tfjs",
+      maxFaces: 1,
+      refineLandmarks: false,
+    },
+    depthEstimator: {
+      modelType: depthEstimation.SupportedModels.ARPortraitDepth,
+      outputDepthRange: [0, 1],
+    },
+    depthEstimationRange: {
+      minDepth: 0,
+      maxDepth: 1,
+    },
+  },
+  overlayStyles: {
+    keypoint: {
+      color: "red",
+      radius: 2,
+    },
+    outerRing: {
+      color: "blue",
+      lineWidth: 2,
+    },
+    depthMap: {
+      inverted: {
+        color: "white",
+      },
+    },
+    triangulation: {
+      color: "green",
+      lineWidth: 1,
+    },
+  },
+  threeJSConfig: {
+    camera: {
+      fieldOfView: 75,
+      aspectRatio: imageInputDimensions.width / imageInputDimensions.height,
+      nearClip: 0.1,
+      farClip: 1000,
+      positionZ: 500,
+    },
+    renderer: {
+      width: imageInputDimensions.width,
+      height: imageInputDimensions.height,
+      backgroundColor: 0xffffff,
+    },
+    controls: {
+      enableDamping: true,
+      dampingFactor: 0.25,
+      enableZoom: true,
+    },
+    pointCloud: {
+      color: 0xff0000,
+      size: 5,
+    },
+    frameRim: {
+      color: 0x0000ff,
+    },
+  },
+  landmarkIndices: {
+    outerRing: [
+      10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
+      378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
+      162, 21, 54, 103, 67, 109,
+    ],
+  },
+  canvasIds: [
+    "outputCanvas",
+    "outerRingCanvas",
+    "maskedDepthCanvas",
+    "invertedDepthCanvas",
+    "invertedMaskedDepthCanvas",
+    "triangulationCanvas",
+    "combinedOverlayCanvas",
+    "depthCanvas",
+  ],
+});
 
 /**
- * Initializes the application.
+ * Initializes the application by loading models, processing images, drawing overlays, and setting up 3D scenes.
+ * @async
+ * @function init
+ * @returns {Promise<void>}
  */
 async function init() {
   try {
-    // Load models
-    const [detector, depthEstimator] = await loadModels();
-
-    // Load image
     const image = await loadImage("inputImage");
+    const imageInputDimensions = {
+      width: image.width,
+      height: image.height,
+    };
+    const config = chartConfiguration(imageInputDimensions);
 
-    // Process image
+    const [detector, depthEstimator] = await loadModels(config);
+
     const { depthImage, predictions } = await processImage(
       image,
       detector,
-      depthEstimator
+      depthEstimator,
+      config
     );
 
     if (predictions.length === 0) {
@@ -43,35 +127,30 @@ async function init() {
 
     const keypoints = predictions[0].keypoints;
 
-    // Draw overlays
-    drawOverlays(image, keypoints, depthImage);
+    drawOverlays(image, keypoints, depthImage, config);
 
-    // Set up Three.js scenes
-    setupThreeJSScenes(image, keypoints);
+    setupThreeJSScenes(image, keypoints, config);
   } catch (error) {
     console.error("An error occurred:", error);
   }
 }
 
 /**
- * Loads the face detection and depth estimation models.
- * @returns {Promise<[faceLandmarksDetection.FaceLandmarksDetector, depthEstimation.DepthEstimator]>}
+ * Loads the face detection and depth estimation models based on the provided configuration.
+ * @async
+ * @function loadModels
+ * @param {Object} config - The configuration object for models.
+ * @returns {Promise<Array>} An array containing the face detector and depth estimator models.
  */
-async function loadModels() {
+async function loadModels(config) {
   const detector = await faceLandmarksDetection.createDetector(
-    faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-    {
-      runtime: "tfjs",
-      maxFaces: 1,
-      refineLandmarks: false,
-    }
+    config.modelConfig.detector.modelType,
+    config.modelConfig.detector
   );
 
   const depthEstimator = await depthEstimation.createEstimator(
-    depthEstimation.SupportedModels.ARPortraitDepth,
-    {
-      outputDepthRange: [0, 1],
-    }
+    config.modelConfig.depthEstimator.modelType,
+    config.modelConfig.depthEstimator
   );
 
   return [detector, depthEstimator];
@@ -79,8 +158,9 @@ async function loadModels() {
 
 /**
  * Loads an image element by its ID.
- * @param {string} imageId - The ID of the image element.
- * @returns {Promise<HTMLImageElement>}
+ * @function loadImage
+ * @param {string} imageId - The ID of the image element to load.
+ * @returns {Promise<HTMLImageElement>} A promise that resolves to the loaded image element.
  */
 function loadImage(imageId) {
   return new Promise((resolve, reject) => {
@@ -97,21 +177,25 @@ function loadImage(imageId) {
 }
 
 /**
- * Processes the image to obtain depth information and facial landmarks.
+ * Processes the input image using the detector and depth estimator models.
+ * @async
+ * @function processImage
  * @param {HTMLImageElement} img - The image to process.
- * @param {faceLandmarksDetection.FaceLandmarksDetector} detector - The face landmarks detector.
- * @param {depthEstimation.DepthEstimator} depthEstimator - The depth estimator.
- * @returns {Promise<{ depthImage: CanvasImageSource, predictions: Array }>}
+ * @param {Object} detector - The face detector model.
+ * @param {Object} depthEstimator - The depth estimator model.
+ * @param {Object} config - The configuration object.
+ * @returns {Promise<Object>} An object containing the depth image and face predictions.
+ * @throws Will throw an error if invalid arguments are passed.
  */
-async function processImage(img, detector, depthEstimator) {
+async function processImage(img, detector, depthEstimator, config) {
   if (!img || !detector || !depthEstimator) {
     throw new Error("Invalid arguments passed to processImage.");
   }
 
-  const depthMap = await depthEstimator.estimateDepth(img, {
-    minDepth: 0,
-    maxDepth: 1,
-  });
+  const depthMap = await depthEstimator.estimateDepth(
+    img,
+    config.modelConfig.depthEstimationRange
+  );
 
   const depthImage = await depthMap.toCanvasImageSource();
 
@@ -123,15 +207,21 @@ async function processImage(img, detector, depthEstimator) {
 }
 
 /**
- * Retrieves canvas contexts for the specified canvas element IDs.
- * @param {string[]} canvasIds - Array of canvas element IDs.
- * @returns {Object} - An object mapping canvas IDs to their 2D contexts.
+ * Retrieves the 2D drawing contexts for a list of canvas elements.
+ * @function getCanvasContexts
+ * @param {Array<string>} canvasIds - An array of canvas element IDs.
+ * @param {number} width - The width to set for each canvas.
+ * @param {number} height - The height to set for each canvas.
+ * @returns {Object} An object mapping canvas IDs to their 2D drawing contexts.
  */
-function getCanvasContexts(canvasIds) {
+function getCanvasContexts(canvasIds, width, height) {
   const contexts = {};
   canvasIds.forEach((id) => {
     const canvas = document.getElementById(id);
     if (canvas) {
+      // Set canvas dimensions to match the image
+      canvas.width = width;
+      canvas.height = height;
       contexts[id] = canvas.getContext("2d");
     } else {
       console.warn(`Canvas element with ID "${id}" not found.`);
@@ -141,70 +231,57 @@ function getCanvasContexts(canvasIds) {
 }
 
 /**
- * Draws various overlays on the image using the provided keypoints and depth image.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
+ * Draws various overlays on the image such as keypoints, outer ring, depth maps, and triangulation.
+ * @function drawOverlays
+ * @param {HTMLImageElement} image - The image on which to draw overlays.
+ * @param {Array<Object>} keypoints - The facial keypoints.
  * @param {CanvasImageSource} depthImage - The depth image.
+ * @param {Object} config - The configuration object.
  */
-function drawOverlays(image, keypoints, depthImage) {
-  const canvasIds = [
-    "outputCanvas",
-    "outerRingCanvas",
-    "maskedDepthCanvas",
-    "invertedDepthCanvas",
-    "invertedMaskedDepthCanvas",
-    "triangulationCanvas",
-    "combinedOverlayCanvas",
-    "depthCanvas",
-  ];
-
-  const contexts = getCanvasContexts(canvasIds);
-
-  // Draw the original image on the output canvas
-  contexts.outputCanvas.drawImage(
-    image,
-    0,
-    0,
-    contexts.outputCanvas.canvas.width,
-    contexts.outputCanvas.canvas.height
+function drawOverlays(image, keypoints, depthImage, config) {
+  const contexts = getCanvasContexts(
+    config.canvasIds,
+    image.width,
+    image.height
   );
 
-  // Draw keypoints
-  drawKeypoints(contexts.outputCanvas, keypoints);
+  // Draw the image correctly on each canvas to avoid zoom or distortion
+  config.canvasIds.forEach((id) => {
+    if (contexts[id]) {
+      // Clear and set the background image on each canvas
+      contexts[id].clearRect(
+        0,
+        0,
+        contexts[id].canvas.width,
+        contexts[id].canvas.height
+      );
+      contexts[id].drawImage(image, 0, 0, image.width, image.height);
+    }
+  });
 
-  // Draw outer ring
-  drawOuterRing(contexts.outerRingCanvas, image, keypoints);
-
-  // Draw depth map
-  drawDepthMap(contexts.depthCanvas, depthImage);
-
-  // Draw masked depth map
-  drawMaskedDepthMap(contexts.maskedDepthCanvas, depthImage, keypoints);
-
-  // Invert depth map
-  invertCanvasImage(contexts.invertedDepthCanvas, depthImage);
-
-  // Invert masked depth map
+  drawKeypoints(contexts.outputCanvas, keypoints, config);
+  drawOuterRing(contexts.outerRingCanvas, image, keypoints, config);
+  drawDepthMap(contexts.depthCanvas, depthImage, config);
+  drawMaskedDepthMap(contexts.maskedDepthCanvas, depthImage, keypoints, config);
+  invertCanvasImage(contexts.invertedDepthCanvas, depthImage, config);
   invertCanvasImage(
     contexts.invertedMaskedDepthCanvas,
-    contexts.maskedDepthCanvas.canvas
+    contexts.maskedDepthCanvas.canvas,
+    config
   );
-
-  // Draw triangulation overlay
-  drawTriangulation(contexts.triangulationCanvas, image, keypoints);
-
-  // Draw combined overlay
-  drawCombinedOverlay(contexts.combinedOverlayCanvas, image, keypoints);
+  drawTriangulation(contexts.triangulationCanvas, image, keypoints, config);
+  drawCombinedOverlay(contexts.combinedOverlayCanvas, image, keypoints, config);
 }
 
 /**
- * Draws facial keypoints on a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
- * @param {Array} keypoints - Array of keypoint objects with x and y properties.
- * @param {string} [color='red'] - The color of the keypoints.
- * @param {number} [radius=2] - The radius of each keypoint.
+ * Draws facial keypoints on the given canvas context.
+ * @function drawKeypoints
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function drawKeypoints(ctx, keypoints, color = "red", radius = 2) {
+function drawKeypoints(ctx, keypoints, config) {
+  const { color, radius } = config.overlayStyles.keypoint;
   ctx.fillStyle = color;
   keypoints.forEach(({ x, y }) => {
     ctx.beginPath();
@@ -214,17 +291,19 @@ function drawKeypoints(ctx, keypoints, color = "red", radius = 2) {
 }
 
 /**
- * Creates the outer ring path on a canvas context based on keypoints.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
- * @param {Array} keypoints - Array of facial landmark keypoints.
+ * Creates a path for the outer ring based on keypoints.
+ * @function createOuterRingPath
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function createOuterRingPath(ctx, keypoints) {
-  const startIdx = OUTER_RING_INDICES[0];
+function createOuterRingPath(ctx, keypoints, config) {
+  const startIdx = config.landmarkIndices.outerRing[0];
   const startPoint = keypoints[startIdx];
   ctx.beginPath();
   ctx.moveTo(startPoint.x, startPoint.y);
 
-  OUTER_RING_INDICES.slice(1).forEach((idx) => {
+  config.landmarkIndices.outerRing.slice(1).forEach((idx) => {
     const point = keypoints[idx];
     ctx.lineTo(point.x, point.y);
   });
@@ -232,54 +311,63 @@ function createOuterRingPath(ctx, keypoints) {
 }
 
 /**
- * Draws the outer ring of facial landmarks on a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
- * @param {string} [strokeStyle='blue'] - The stroke color.
- * @param {number} [lineWidth=2] - The line width.
- * @param {boolean} [drawImageFirst=true] - Whether to draw the image before drawing the outer ring.
+ * Draws the outer ring around the face on the given canvas context.
+ * @function drawOuterRing
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
+ * @param {HTMLImageElement} image - The image on which to draw.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function drawOuterRing(
-  ctx,
-  image,
-  keypoints,
-  strokeStyle = "blue",
-  lineWidth = 2,
-  drawImageFirst = true
-) {
-  if (drawImageFirst) {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
+function drawOuterRing(ctx, image, keypoints, config) {
+  const { color, lineWidth } = config.overlayStyles.outerRing;
 
-  ctx.strokeStyle = strokeStyle;
+  // Clear the canvas and draw the image background first
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(image, 0, 0, image.width, image.height);
+
+  // Set stroke style for the outer ring
+  ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
 
-  createOuterRingPath(ctx, keypoints);
+  // Draw the outer ring based on the configured indices
+  ctx.beginPath();
+  const startIdx = config.landmarkIndices.outerRing[0];
+  const startPoint = keypoints[startIdx];
+  ctx.moveTo(startPoint.x, startPoint.y);
+
+  config.landmarkIndices.outerRing.slice(1).forEach((idx) => {
+    const point = keypoints[idx];
+    ctx.lineTo(point.x, point.y);
+  });
+  ctx.closePath();
   ctx.stroke();
 }
 
 /**
- * Draws the depth map onto a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * Draws the depth map on the given canvas context.
+ * @function drawDepthMap
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
  * @param {CanvasImageSource} depthImage - The depth image.
+ * @param {Object} config - The configuration object.
  */
-function drawDepthMap(ctx, depthImage) {
+function drawDepthMap(ctx, depthImage, config) {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.drawImage(depthImage, 0, 0, ctx.canvas.width, ctx.canvas.height);
 }
 
 /**
- * Draws the masked depth map using the outer ring path as a clipping mask.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * Draws the masked depth map within the outer ring on the given canvas context.
+ * @function drawMaskedDepthMap
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
  * @param {CanvasImageSource} depthImage - The depth image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function drawMaskedDepthMap(ctx, depthImage, keypoints) {
+function drawMaskedDepthMap(ctx, depthImage, keypoints, config) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.save();
 
-  createOuterRingPath(ctx, keypoints);
+  createOuterRingPath(ctx, keypoints, config);
   ctx.clip();
 
   ctx.drawImage(depthImage, 0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -287,43 +375,37 @@ function drawMaskedDepthMap(ctx, depthImage, keypoints) {
 }
 
 /**
- * Inverts the colors of an image or canvas source and draws it onto a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * Inverts the colors of the image drawn on the canvas context.
+ * @function invertCanvasImage
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
  * @param {CanvasImageSource} source - The source image or canvas.
+ * @param {Object} config - The configuration object.
  */
-function invertCanvasImage(ctx, source) {
+function invertCanvasImage(ctx, source, config) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.drawImage(source, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
   ctx.globalCompositeOperation = "difference";
-  ctx.fillStyle = "white";
+  ctx.fillStyle = config.overlayStyles.depthMap.inverted.color;
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.globalCompositeOperation = "source-over";
 }
 
 /**
- * Draws the facial triangulation overlay on a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
- * @param {string} [strokeStyle='green'] - The stroke color.
- * @param {number} [lineWidth=1] - The line width.
- * @param {boolean} [drawImageFirst=true] - Whether to draw the image before drawing the triangulation.
+ * Draws the triangulation overlay on the given canvas context.
+ * @function drawTriangulation
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
+ * @param {HTMLImageElement} image - The image on which to draw.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function drawTriangulation(
-  ctx,
-  image,
-  keypoints,
-  strokeStyle = "green",
-  lineWidth = 1,
-  drawImageFirst = true
-) {
-  if (drawImageFirst) {
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
+function drawTriangulation(ctx, image, keypoints, config) {
+  const { color, lineWidth } = config.overlayStyles.triangulation;
 
-  ctx.strokeStyle = strokeStyle;
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
 
   for (let i = 0; i < TRIANGULATION.length; i += 3) {
@@ -341,43 +423,48 @@ function drawTriangulation(
 }
 
 /**
- * Draws a combined overlay of the triangulation, outer ring, and keypoints on a canvas context.
- * @param {CanvasRenderingContext2D} ctx - The canvas context.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
+ * Draws a combined overlay of triangulation, outer ring, and keypoints on the given canvas context.
+ * @function drawCombinedOverlay
+ * @param {CanvasRenderingContext2D} ctx - The canvas 2D context.
+ * @param {HTMLImageElement} image - The image on which to draw.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function drawCombinedOverlay(ctx, image, keypoints) {
+function drawCombinedOverlay(ctx, image, keypoints, config) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.drawImage(image, 0, 0, ctx.canvas.width, ctx.canvas.height);
 
-  // Draw triangulation without redrawing the image
-  drawTriangulation(ctx, image, keypoints, "green", 1, false);
+  // Draw the background image first to prevent zooming issues
+  ctx.drawImage(image, 0, 0, image.width, image.height);
 
-  // Draw outer ring without redrawing the image
-  drawOuterRing(ctx, image, keypoints, "blue", 2, false);
+  // Draw the triangulation overlay
+  drawTriangulation(ctx, image, keypoints, config);
 
-  // Draw keypoints
-  drawKeypoints(ctx, keypoints, "red", 2);
+  // Draw the outer ring after triangulation to ensure correct layering
+  drawOuterRing(ctx, image, keypoints, config);
+
+  // Draw keypoints last to make sure they’re on top of other elements
+  drawKeypoints(ctx, keypoints, config);
 }
 
 /**
- * Sets up the Three.js scenes for rendering 3D models.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
+ * Sets up the Three.js 3D scenes for wireframe, textured mesh, point cloud, and frame rim.
+ * @function setupThreeJSScenes
+ * @param {HTMLImageElement} image - The input image.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {Object} config - The configuration object.
  */
-function setupThreeJSScenes(image, keypoints) {
+function setupThreeJSScenes(image, keypoints, config) {
   const verticesData = getVerticesData(image, keypoints);
 
-  // 3D wireframe scene
   const wireframeScene = createThreeJSScene(
     "wireframeContainer",
     verticesData.vertices,
     verticesData.uvCoordinates,
     verticesData.indices,
-    { color: 0x00ff00, wireframe: true }
+    { color: config.overlayStyles.triangulation.color, wireframe: true },
+    config
   );
 
-  // Textured 3D scene
   const texture = new THREE.Texture(image);
   texture.needsUpdate = true;
 
@@ -386,23 +473,23 @@ function setupThreeJSScenes(image, keypoints) {
     verticesData.vertices,
     verticesData.uvCoordinates,
     verticesData.indices,
-    { map: texture, side: THREE.DoubleSide }
+    { map: texture, side: THREE.DoubleSide },
+    config
   );
 
-  // Point Cloud Scene
   const pointCloudScene = createPointCloudScene(
     "pointCloudContainer",
-    verticesData.vertices
+    verticesData.vertices,
+    config
   );
 
-  // Frame Rim Scene
   const frameRimScene = createFrameRimScene(
     "frameRimContainer",
     verticesData.vertices,
-    OUTER_RING_INDICES
+    config.landmarkIndices.outerRing,
+    config
   );
 
-  // Animate scenes
   animateScenes([
     wireframeScene,
     texturedScene,
@@ -412,11 +499,12 @@ function setupThreeJSScenes(image, keypoints) {
 }
 
 /**
- * Generates vertex data for 3D rendering based on keypoints.
- * @param {HTMLImageElement} image - The original image.
- * @param {Array} keypoints - Array of facial landmark keypoints.
- * @param {number} [depthScale=1] - Scale factor for the depth (z-axis).
- * @returns {Object} - An object containing vertices, flatVertices, uvCoordinates, and indices.
+ * Generates vertices, UV coordinates, and indices for 3D rendering based on keypoints.
+ * @function getVerticesData
+ * @param {HTMLImageElement} image - The input image.
+ * @param {Array<Object>} keypoints - The facial keypoints.
+ * @param {number} [depthScale=1] - The scaling factor for depth (z-axis).
+ * @returns {Object} An object containing vertices, flat vertices, UV coordinates, and indices.
  */
 function getVerticesData(image, keypoints, depthScale = 1) {
   const vertices = [];
@@ -438,38 +526,46 @@ function getVerticesData(image, keypoints, depthScale = 1) {
 }
 
 /**
- * Creates a Three.js scene with a mesh constructed from provided geometry and material options.
- * @param {string} containerId - The ID of the container element.
- * @param {number[]} positions - Vertex positions.
- * @param {number[]} uvs - UV texture coordinates.
- * @param {number[]} indices - Indices for the mesh.
- * @param {Object} materialOptions - Options for the material.
- * @returns {Object} - An object containing the scene, camera, renderer, and controls.
+ * Creates a Three.js scene with a mesh based on provided vertices and indices.
+ * @function createThreeJSScene
+ * @param {string} containerId - The ID of the HTML container element.
+ * @param {Array<number>} positions - The vertex positions.
+ * @param {Array<number>} uvs - The UV coordinates.
+ * @param {Array<number>} indices - The vertex indices.
+ * @param {Object} materialOptions - Options for the mesh material.
+ * @param {Object} config - The configuration object.
+ * @returns {Object|null} An object containing the scene, camera, renderer, and controls, or null if container not found.
  */
 function createThreeJSScene(
   containerId,
   positions,
   uvs,
   indices,
-  materialOptions
+  materialOptions,
+  config
 ) {
   const container = document.getElementById(containerId);
-  if (!container) {
-    console.warn(`Container element with ID "${containerId}" not found.`);
-    return null;
-  }
+  if (!container) return null;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-  camera.position.z = 500;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(400, 400);
+  renderer.setSize(
+    config.threeJSConfig.renderer.width,
+    config.threeJSConfig.renderer.height
+  );
+  renderer.setClearColor(config.threeJSConfig.renderer.backgroundColor, 0);
   container.appendChild(renderer.domElement);
-  renderer.setClearColor(0xffffff, 0);
+
+  const camera = new THREE.PerspectiveCamera(
+    config.threeJSConfig.camera.fieldOfView,
+    config.threeJSConfig.camera.aspectRatio,
+    config.threeJSConfig.camera.nearClip,
+    config.threeJSConfig.camera.farClip
+  );
+  camera.position.z = config.threeJSConfig.camera.positionZ;
+
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.25;
-  controls.enableZoom = true;
+  Object.assign(controls, config.threeJSConfig.controls);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
@@ -480,7 +576,6 @@ function createThreeJSScene(
   geometry.setIndex(indices);
 
   const material = new THREE.MeshBasicMaterial(materialOptions);
-
   const mesh = new THREE.Mesh(geometry, material);
   scene.add(mesh);
 
@@ -488,12 +583,14 @@ function createThreeJSScene(
 }
 
 /**
- * Creates a Three.js scene displaying a 3D point cloud.
- * @param {string} containerId - The ID of the container element.
- * @param {number[]} positions - Vertex positions.
- * @returns {Object} - An object containing the scene, camera, renderer, and controls.
+ * Creates a Three.js scene displaying a point cloud of the facial keypoints.
+ * @function createPointCloudScene
+ * @param {string} containerId - The ID of the HTML container element.
+ * @param {Array<number>} positions - The vertex positions.
+ * @param {Object} config - The configuration object.
+ * @returns {Object|null} An object containing the scene, camera, renderer, and controls, or null if container not found.
  */
-function createPointCloudScene(containerId, positions) {
+function createPointCloudScene(containerId, positions, config) {
   const container = document.getElementById(containerId);
   if (!container) {
     console.warn(`Container element with ID "${containerId}" not found.`);
@@ -501,17 +598,24 @@ function createPointCloudScene(containerId, positions) {
   }
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-  camera.position.z = 500;
+  const camera = new THREE.PerspectiveCamera(
+    config.threeJSConfig.camera.fieldOfView,
+    config.threeJSConfig.camera.aspectRatio,
+    config.threeJSConfig.camera.nearClip,
+    config.threeJSConfig.camera.farClip
+  );
+  camera.position.z = config.threeJSConfig.camera.positionZ;
+
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(400, 400);
-  renderer.setClearColor(0xffffff, 0);
+  renderer.setSize(
+    config.threeJSConfig.renderer.width,
+    config.threeJSConfig.renderer.height
+  );
+  renderer.setClearColor(config.threeJSConfig.renderer.backgroundColor, 0);
   container.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.25;
-  controls.enableZoom = true;
+  Object.assign(controls, config.threeJSConfig.controls);
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute(
@@ -519,19 +623,23 @@ function createPointCloudScene(containerId, positions) {
     new THREE.Float32BufferAttribute(positions, 3)
   );
 
-  // Increased point size from 2 to 5
-  const material = new THREE.PointsMaterial({ color: 0xff0000, size: 5 });
-
-  // Optional: Disable size attenuation if you want consistent point sizes
-  // const material = new THREE.PointsMaterial({ color: 0xff0000, size: 5, sizeAttenuation: false });
-
+  const material = new THREE.PointsMaterial(config.threeJSConfig.pointCloud);
   const points = new THREE.Points(geometry, material);
   scene.add(points);
 
   return { scene, camera, renderer, controls };
 }
 
-function createFrameRimScene(containerId, positions, ringIndices) {
+/**
+ * Creates a Three.js scene displaying a frame rim around the face based on the outer ring keypoints.
+ * @function createFrameRimScene
+ * @param {string} containerId - The ID of the HTML container element.
+ * @param {Array<number>} positions - The vertex positions.
+ * @param {Array<number>} ringIndices - The indices for the outer ring keypoints.
+ * @param {Object} config - The configuration object.
+ * @returns {Object|null} An object containing the scene, camera, renderer, and controls, or null if container not found.
+ */
+function createFrameRimScene(containerId, positions, ringIndices, config) {
   const container = document.getElementById(containerId);
   if (!container) {
     console.warn(`Container element with ID "${containerId}" not found.`);
@@ -539,19 +647,25 @@ function createFrameRimScene(containerId, positions, ringIndices) {
   }
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-  camera.position.z = 500;
+  const camera = new THREE.PerspectiveCamera(
+    config.threeJSConfig.camera.fieldOfView,
+    config.threeJSConfig.camera.aspectRatio,
+    config.threeJSConfig.camera.nearClip,
+    config.threeJSConfig.camera.farClip
+  );
+  camera.position.z = config.threeJSConfig.camera.positionZ;
+
   const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(400, 400);
+  renderer.setSize(
+    config.threeJSConfig.renderer.width,
+    config.threeJSConfig.renderer.height
+  );
   container.appendChild(renderer.domElement);
-  renderer.setClearColor(0xffffff, 0);
+  renderer.setClearColor(config.threeJSConfig.renderer.backgroundColor, 0);
 
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.25;
-  controls.enableZoom = true;
+  Object.assign(controls, config.threeJSConfig.controls);
 
-  // Extract the positions for the outer ring
   const ringPositions = [];
   ringIndices.forEach((idx) => {
     ringPositions.push(
@@ -561,7 +675,6 @@ function createFrameRimScene(containerId, positions, ringIndices) {
     );
   });
 
-  // Create a closed loop by adding the first point at the end
   ringPositions.push(ringPositions[0], ringPositions[1], ringPositions[2]);
 
   const geometry = new THREE.BufferGeometry();
@@ -570,8 +683,7 @@ function createFrameRimScene(containerId, positions, ringIndices) {
     new THREE.Float32BufferAttribute(ringPositions, 3)
   );
 
-  // Change the color from yellow (0xffff00) to blue (0x0000ff)
-  const material = new THREE.LineBasicMaterial({ color: 0x0000ff });
+  const material = new THREE.LineBasicMaterial(config.threeJSConfig.frameRim);
   const line = new THREE.LineLoop(geometry, material);
   scene.add(line);
 
@@ -579,8 +691,9 @@ function createFrameRimScene(containerId, positions, ringIndices) {
 }
 
 /**
- * Animates multiple Three.js scenes.
- * @param {Array} scenes - Array of scene objects containing renderer, scene, camera, and controls.
+ * Animates the provided Three.js scenes by updating controls and rendering frames.
+ * @function animateScenes
+ * @param {Array<Object>} scenes - An array of scene objects containing scene, camera, renderer, and controls.
  */
 function animateScenes(scenes) {
   function animate() {
@@ -596,4 +709,5 @@ function animateScenes(scenes) {
   animate();
 }
 
+// Initialize the application
 init();
